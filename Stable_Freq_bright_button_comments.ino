@@ -6,6 +6,8 @@
 #define PIN_FREQ 9
 #define PIN_CLOCK 13
 
+
+boolean first_freq = true;  // First freq has to de displayed in one time
 int buttonTic = 0;  // 1 press on button = 1 tic
 float range = 0.00109; // Default : 50Mhz
 boolean buttonPressed = false;  // If button is pressed
@@ -41,8 +43,21 @@ void setup() {
   strip.setBrightness(bright); //adjust brightness here
   strip.show();
 
+  pinMode(A0, OUTPUT);
+  digitalWrite(A0, LOW);
+  pinMode(A1, OUTPUT);
+  digitalWrite(A1, LOW);
+  pinMode(A2, OUTPUT);
+  digitalWrite(A2, LOW);
+  pinMode(A3, OUTPUT);
+  digitalWrite(A3, LOW);
+  pinMode(A4, OUTPUT);
+  digitalWrite(A4, LOW);
+  pinMode(A5, OUTPUT);
+  digitalWrite(A5, LOW);
+
   // Initialize timer1
-  noInterrupts();           // disable all interrupts
+  noInterrupts(); // disable all interrupts
   TCCR1A = 0;
   TCCR1B = 0; // Normal mode
 
@@ -111,6 +126,36 @@ void setMode(int btTic) {
     strip.setPixelColor(i, 0, 0, 0);
     strip.show();
   }
+  if (freq >= 50.0) idx = 1;
+  else idx = 23;
+  nbLed = abs(50.0 - freq) / range;
+  if (nbLed > 23) nbLed = 23;
+  if (freq > 50.0) {
+    low = false;
+    for (idx; idx <= nbLed; idx++) {  // Set LED from 0 to right
+      for (int j = 0; j < idx; j++) { // Update alight LED with new color
+        strip.setPixelColor(j, setColor(idx), bright);
+        strip.show();
+      }
+      strip.setPixelColor(idx, setColor(idx), 255);
+      strip.show();
+    }
+  }
+  else {
+    low = true;
+    for (idx ; idx >= 24 - nbLed; idx--) {  // Set LED from 0 to left
+      strip.setPixelColor(0, setColor(24 - idx), bright);
+      for (int j = 23; j > idx; j--) {  // Update alight LED with new color
+        strip.setPixelColor(0, setColor(24 - idx), bright);
+        strip.setPixelColor(j, setColor(24 - idx), bright);
+        strip.show();
+      }
+      strip.setPixelColor(idx, setColor(24 - idx), 255);
+      strip.show();
+    }
+  }
+  prev_freq = freq;
+  prev_led = nbLed;
 }
 
 void freq_int() {
@@ -193,6 +238,36 @@ void show_freq() {
   delay_t = (23 - abs(prev_led - nbLed)) * 1.5;
   Serial.print("Nb Leds: ");
   Serial.println(nbLed);
+  if (first_freq) {
+    if (freq > 50.0) {
+      low = false;
+      for (idx; idx <= nbLed; idx++) {  // Set LED from 0 to right
+        for (int j = 0; j < idx; j++) { // Update alight LED with new color
+          strip.setPixelColor(j, setColor(idx), bright);
+          strip.show();
+        }
+        strip.setPixelColor(idx, setColor(idx), 255);
+        strip.show();
+      }
+    }
+    else {
+      low = true;
+      for (idx ; idx >= 24 - nbLed; idx--) {  // Set LED from 0 to left
+        strip.setPixelColor(0, setColor(24 - idx), bright);
+        for (int j = 23; j > idx; j--) {  // Update alight LED with new color
+          strip.setPixelColor(0, setColor(24 - idx), bright);
+          strip.setPixelColor(j, setColor(24 - idx), bright);
+          strip.show();
+        }
+        strip.setPixelColor(idx, setColor(24 - idx), 255);
+        strip.show();
+      }
+    }
+    prev_freq = freq;
+    prev_led = nbLed;
+    change = false;
+    first_freq = false;
+  }
   if (prev_freq != 0) { // Don't check at the first call
     if (low) { // If previous freq was low (<50)
       if (freq > 50.0) { // If new freq is high (>50)  -> Normal clean
