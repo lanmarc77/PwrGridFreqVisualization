@@ -6,7 +6,6 @@
 #define PIN_FREQ 9
 #define PIN_CLOCK 13
 
-
 boolean first_freq = true;  // First freq has to de displayed in one time
 int buttonTic = 0;  // 1 press on button = 1 tic
 float range = 0.00109; // Default : 50Mhz
@@ -235,6 +234,7 @@ void show_freq() {
   else idx = 23;
   nbLed = abs(50.0 - freq) / range;
   if (nbLed > 23) nbLed = 23;
+  if (nbLed == 0) nbLed = 1;
   delay_t = (23 - abs(prev_led - nbLed)) * 1.5;
   Serial.print("Nb Leds: ");
   Serial.println(nbLed);
