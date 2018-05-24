@@ -6,6 +6,11 @@
 #define PIN_FREQ 9
 #define PIN_CLOCK 13
 
+//#define SERIAL_OUT
+#ifdef SERIAL_OUT
+Serial.begin(9600);
+#endif
+
 boolean first_freq = true;  // First freq has to de displayed in one time
 int buttonTic = 0;  // 1 press on button = 1 tic
 float range = 0.00109; // Default : 50Mhz
@@ -35,8 +40,6 @@ unsigned char send_flag = 0;  // True when a new frequency is calculated
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(24, PIN_NEO, NEO_RGB + NEO_KHZ800);
 
 void setup() {
-  Serial.begin(9600);
-
   // Initialize NeoPixel
   strip.begin();
   strip.setBrightness(bright); //adjust brightness here
