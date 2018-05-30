@@ -5,11 +5,7 @@
 #define PIN_BUTTON 5
 #define PIN_FREQ 9
 #define PIN_CLOCK 13
-
 //#define SERIAL_OUT
-#ifdef SERIAL_OUT
-Serial.begin(9600);
-#endif
 
 boolean first_freq = true;  // First freq has to de displayed in one time
 int buttonTic = 0;  // 1 press on button = 1 tic
@@ -40,6 +36,11 @@ unsigned char send_flag = 0;  // True when a new frequency is calculated
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(24, PIN_NEO, NEO_RGB + NEO_KHZ800);
 
 void setup() {
+
+#ifdef SERIAL_OUT
+  Serial.begin(9600);
+#endif
+
   // Initialize NeoPixel
   strip.begin();
   strip.setBrightness(bright); //adjust brightness here
@@ -57,6 +58,8 @@ void setup() {
   digitalWrite(A4, LOW);
   pinMode(A5, OUTPUT);
   digitalWrite(A5, LOW);
+  pinMode(13, INPUT);
+  digitalWrite(13, LOW);
 
   // Initialize timer1
   noInterrupts(); // disable all interrupts
@@ -80,10 +83,16 @@ void setup() {
   set_sleep_mode(SLEEP_MODE_IDLE);
 }
 
+/**
+   Internal clock timer interrupt
+*/
 ISR(TIMER1_OVF_vect) {  // interrupt service routine
   timer_tic += 65536;
 }
 
+/**
+   Button interrupt with debouncing
+*/
 void button_int() { // Button Interrupt
   static unsigned long last_interrupt_time = 0;
   unsigned long interrupt_time = millis();
@@ -106,9 +115,14 @@ void button_int() { // Button Interrupt
   last_interrupt_time = interrupt_time;
 }
 
+/**
+   Switch mode from the button (50 or 200MHz)
+*/
 void setMode(int btTic) {
   if (buttonTic % 2 == 1) {
+#ifdef SERIAL_OUT
     Serial.println("Mode 2 ~ 200MHz");
+#endif
     range = 0.0043;
     for (int i = 0; i < 24; i++) {
       strip.setPixelColor(i, 255, 255, 255);
@@ -116,7 +130,9 @@ void setMode(int btTic) {
     }
   }
   else {
+#ifdef SERIAL_OUT
     Serial.println("Mode 1 ~ 50MHz");
+#endif
     range = 0.00109;
     for (int i = 0; i < 24; i++) {
       strip.setPixelColor(i, 255, 255, 0);
@@ -160,6 +176,9 @@ void setMode(int btTic) {
   prev_led = nbLed;
 }
 
+/**
+   Frequency interrupt from the FREQ_PIN (electric power)
+*/
 void freq_int() {
   if (first_period && (period == 0)) {
     TCCR1B |= (1 << CS10);  // Start internal Timer with no prescale
@@ -178,6 +197,9 @@ void freq_int() {
   }
 }
 
+/**
+  Extern clock interrupt for the correction
+*/
 void clock_int() {
   if (!correct) {
     if (ds_tics == 0) TCCR1B |= (1 << CS10);  // Start internal Timer with no prescale
@@ -197,6 +219,9 @@ void clock_int() {
   }
 }
 
+/**
+  Calculation of the frequency and display it with show_freq()
+*/
 void loop() {
   boolean first_value = true;  // First freq value isn't good so just skip it
   float decimal = 0;
@@ -209,18 +234,25 @@ void loop() {
     sleep_mode();
     if (send_flag) {
       send_flag = 0;
+#ifdef SERIAL_OUT
       Serial.print("Frequency : ");
+#endif
       if (tmp_tics <= 16000000) {
         decimal = ((16000000L - tmp_tics) / 320) * 0.001;
         freq = 50.0 + decimal;
+#ifdef SERIAL_OUT
         Serial.println(freq, 3);
+#endif
       } else {
         decimal = ((1000 - (tmp_tics - 16000000L) / 320) % 1000) * 0.001;
         if (decimal == 0) decimal = 0.999;
         freq = 49.0 + decimal;
+#ifdef SERIAL_OUT
         Serial.println(freq, 3);
+#endif
       }
       if (!first_value) {
+        if (freq < 49.8 || freq > 50.2) digitalWrite(13, HIGH);
         show_freq();
       }
       first_value = false;
@@ -228,6 +260,9 @@ void loop() {
   }
 }
 
+/**
+      Main program for the NeoPixel
+*/
 void show_freq() {
   bright = 255;
   change = true;  // true: execute the main loop to turn on led
@@ -239,8 +274,10 @@ void show_freq() {
   if (nbLed > 23) nbLed = 23;
   if (nbLed == 0) nbLed = 1;
   delay_t = (23 - abs(prev_led - nbLed)) * 1.5;
+#ifdef SERIAL_OUT
   Serial.print("Nb Leds: ");
   Serial.println(nbLed);
+#endif
   if (first_freq) {
     if (freq > 50.0) {
       low = false;
@@ -407,7 +444,11 @@ void show_freq() {
   prev_led = nbLed;
 }
 
-uint32_t setColor(int led) { // Calculate RGB value according to the number of led on
+/*  Calculate RGB value according to the number of led on
+    param led : LED index on the ring
+    return RBG color value
+*/
+uint32_t setColor(int led) {
   if (led < 6) return strip.Color(255 - (led % 6) * 20, 0 + (led % 6) * 30, 0);
   else if (led < 9) return strip.Color(155 - (led % 3) * 15, 150, 0);
   else if (led < 12) return strip.Color(110 - (led % 3) * 15, 150 + (led % 3) * 15, 0);
