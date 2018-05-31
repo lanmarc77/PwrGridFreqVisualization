@@ -4,32 +4,50 @@
 #define PIN_NEO 2
 #define PIN_BUTTON 5
 #define PIN_FREQ 9
-#define PIN_CLOCK 13
+#define PIN_CLOCK 12
 #define SERIAL_OUT
 
+/**
+   NeoPixel variables
+*/
+double freq = 0;  // Frequency value
 boolean first_freq = true;  // First freq has to de displayed in one time
-int buttonTic = 0;  // 1 press on button = 1 tic
 float range = 0.00109; // Default : 50Mhz
-boolean buttonPressed = false;  // If button is pressed
-int tmpButtonTic = 0; // Tmp cariable to store buttonTic
 int bright = 42;  // NeoPixel brightness
 float prev_freq = 0;  // Value of the previous frequency when a new one is calculated
 int prev_led = 0; // Value of the previous variable nbLed when a new frequency is calculated
 int idx = 0;  // LED index by traversing the NeoPixel
-int nbLed = 0;  // Number of LEds to turn on according to the frequency value
+int nbLed = 0;  // Number of LEDs to turn on according to the frequency value
 int delay_t = 0;  // Value of delay between 2 LEDs
+boolean low; // true : low freq // false : high freq
+
+/**
+  Button interrupt variables
+*/
+int buttonTic = 0;  // 1 press on button = 1 tic
+boolean buttonPressed = false;  // If button is pressed
+int tmpButtonTic = 0; // Tmp cariable to store buttonTic
 boolean modeChange = false; // If mode changed i.e. button is pressed
 boolean change = true; // true : need change
-boolean low; // true : low freq // false : high freq
-long ds_tics = -10; // External clock tics
+
+/**
+   Freq interrupt variables
+*/
 volatile long timer_tic = 0;  // Internal Timer tics
 volatile long tmp_tics = 0; // Tmp variable to store timer_tic
 volatile int period = -10;  // Period counter
-double freq = 0;  // Frequency value
-long correction = 0;  // Correction factor for the internal Timer
-boolean correct = false;  // If correction is calculated
-boolean first_period = true;
 unsigned char send_flag = 0;  // True when a new frequency is calculated
+
+/**
+   External clock interrupt variables
+*/
+long ds_tics = -10; // External clock tics
+long correction = 0;  // Correction factor for the internal Timer
+
+/**
+   Others variables
+*/
+volatile char program_state = 0; // 0 = waiting for precision correction , 1 = done with precision  , 2 = mesuring 1st 100 swings , 3 =  normal operating state
 
 // Parameter 1 = number of pixels in strip
 // Parameter 2 = pin number
@@ -180,9 +198,9 @@ void setMode(int btTic) {
    Frequency interrupt from the FREQ_PIN (electric power)
 */
 void freq_int() {
-  if (first_period && (period == 0)) {
-    TCCR1B |= (1 << CS10);  // Start internal Timer with no prescale
-    first_period = false;
+  if ((program_state == 1) && (period == -1)) {
+    TCCR1B = (1 << CS10);  // Start internal Timer with no prescale
+    program_state = 2;
   }
   period++;
   if (period == 100) {
@@ -193,6 +211,7 @@ void freq_int() {
     timer_tic = 0;
     period = 0;
     send_flag = 1;
+    program_state = 3;
     TCCR1B |= (1 << CS10);
   }
 }
@@ -201,7 +220,7 @@ void freq_int() {
   Extern clock interrupt for the correction
 */
 void clock_int() {
-  if (!correct) {
+  if (program_state == 0) {
     if (ds_tics == 0) TCCR1B |= (1 << CS10);  // Start internal Timer with no prescale
     ds_tics++;
     if (ds_tics == 32768) {
@@ -209,10 +228,9 @@ void clock_int() {
       timer_tic += TCNT1;
       TCNT1 = 0;
       correction = timer_tic - 16000000;
-      TCNT1 = 0;
       timer_tic = 0;
       ds_tics = 0;
-      correct = true;
+      program_state = 1;
       attachPinChangeInterrupt(digitalPinToPinChangeInterrupt(PIN_FREQ), freq_int, RISING);  // Enable PCInterrrupt on PIN_FREQ with rising edge
       detachPinChangeInterrupt(digitalPinToPinChangeInterrupt(PIN_CLOCK));  // Disable PCInterrupt on PIN_CLOCK
     }
@@ -223,49 +241,47 @@ void clock_int() {
   Calculation of the frequency and display it with show_freq()
 */
 void loop() {
-  boolean first_value = true;  // First freq value isn't good so just skip it
   float decimal = 0;
   while (1) {
-    if (modeChange) {
-      setMode(tmpButtonTic);
-      modeChange = false;
-    }
-    set_sleep_mode(SLEEP_MODE_IDLE);
-    cli();
-    unsigned char lc_send_flag = send_flag;
-    long lc_tmp_tics = tmp_tics;
-    sei();
-    sleep_mode();
-    if (lc_send_flag) {
-      lc_send_flag = 0;
-#ifdef SERIAL_OUT
-      Serial.print("Frequency : ");
-#endif
-      if (lc_tmp_tics <= 16000000) {
-        decimal = ((16000000L - lc_tmp_tics) / 320) * 0.001;
-        freq = 50.0 + decimal;
-#ifdef SERIAL_OUT
-        Serial.println(freq, 3);
-#endif
-      } else {
-        decimal = ((1000 - (lc_tmp_tics - 16000000L) / 320) % 1000) * 0.001;
-        if (decimal == 0) decimal = 0.999;
-        freq = 49.0 + decimal;
-#ifdef SERIAL_OUT
-        Serial.println(freq, 3);
-#endif
+    if (program_state == 3) {
+      if (modeChange) {
+        setMode(tmpButtonTic);
+        modeChange = false;
       }
-      if (!first_value) {
+      cli();
+      long lc_send_flag = send_flag;
+      send_flag = 0;
+      sei();
+      if (lc_send_flag) {
+        cli();
+        long lc_tmp_tics = tmp_tics;
+        sei();
+#ifdef SERIAL_OUT
+        Serial.print("Frequency : ");
+#endif
+        if (lc_tmp_tics <= 16000000) {
+          decimal = ((16000000L - lc_tmp_tics) / 320) * 0.001;
+          freq = 50.0 + decimal;
+#ifdef SERIAL_OUT
+          Serial.println(freq, 3);
+#endif
+        } else {
+          decimal = ((1000 - (lc_tmp_tics - 16000000L) / 320) % 1000) * 0.001;
+          if (decimal == 0) decimal = 0.999;
+          freq = 49.0 + decimal;
+#ifdef SERIAL_OUT
+          Serial.println(freq, 3);
+#endif
+        }
         if (freq < 49.8 || freq > 50.2) digitalWrite(13, HIGH);
         show_freq();
       }
-      first_value = false;
     }
   }
 }
 
 /**
-      Main program for the NeoPixel
+    Display the frequency value with RGB and faded effects, 1st LED is 50Hz, going to left is minus and going to right is plus
 */
 void show_freq() {
   bright = 255;
