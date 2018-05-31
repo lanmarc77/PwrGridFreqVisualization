@@ -5,7 +5,7 @@
 #define PIN_BUTTON 5
 #define PIN_FREQ 9
 #define PIN_CLOCK 13
-//#define SERIAL_OUT
+#define SERIAL_OUT
 
 boolean first_freq = true;  // First freq has to de displayed in one time
 int buttonTic = 0;  // 1 press on button = 1 tic
@@ -58,7 +58,7 @@ void setup() {
   digitalWrite(A4, LOW);
   pinMode(A5, OUTPUT);
   digitalWrite(A5, LOW);
-  pinMode(13, INPUT);
+  pinMode(13, OUTPUT);
   digitalWrite(13, LOW);
 
   // Initialize timer1
@@ -231,20 +231,24 @@ void loop() {
       modeChange = false;
     }
     set_sleep_mode(SLEEP_MODE_IDLE);
+    cli();
+    unsigned char lc_send_flag = send_flag;
+    long lc_tmp_tics = tmp_tics;
+    sei();
     sleep_mode();
-    if (send_flag) {
-      send_flag = 0;
+    if (lc_send_flag) {
+      lc_send_flag = 0;
 #ifdef SERIAL_OUT
       Serial.print("Frequency : ");
 #endif
-      if (tmp_tics <= 16000000) {
-        decimal = ((16000000L - tmp_tics) / 320) * 0.001;
+      if (lc_tmp_tics <= 16000000) {
+        decimal = ((16000000L - lc_tmp_tics) / 320) * 0.001;
         freq = 50.0 + decimal;
 #ifdef SERIAL_OUT
         Serial.println(freq, 3);
 #endif
       } else {
-        decimal = ((1000 - (tmp_tics - 16000000L) / 320) % 1000) * 0.001;
+        decimal = ((1000 - (lc_tmp_tics - 16000000L) / 320) % 1000) * 0.001;
         if (decimal == 0) decimal = 0.999;
         freq = 49.0 + decimal;
 #ifdef SERIAL_OUT
