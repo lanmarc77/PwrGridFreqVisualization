@@ -20,6 +20,33 @@ boolean modeChange = false; // If mode changed i.e. button is pressed
 // Parameter 2 = pin number
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(24, PIN_NEO, NEO_RGB + NEO_KHZ800);
 
+/**
+  Button interrupt variables
+*/
+int buttonTic = 0;  // 1 press on button = 1 tic
+boolean buttonPressed = false;  // If button is pressed
+int tmpButtonTic = 0; // Tmp cariable to store buttonTic
+
+/**
+   Freq interrupt variables
+*/
+volatile long timer_tic = 0;  // Internal Timer tics
+volatile long tmp_tics = 0; // Tmp variable to store timer_tic
+volatile int period = -10;  // Period counter
+unsigned char send_flag = 0;  // True when a new frequency is calculated
+
+/**
+   External clock interrupt variables
+*/
+long ds_tics = -10; // External clock tics
+long correction = 0;  // Correction factor for the internal Timer
+
+/**
+   Others variables
+*/
+volatile char program_state = 0; // 0 = waiting for precision correction , 1 = done with precision  , 2 = mesuring 1st 100 swings , 3 =  normal operating state
+
+
 /*  Calculate RGB value according to the number of led on
     param led : LED index on the ring
     return RBG color value
