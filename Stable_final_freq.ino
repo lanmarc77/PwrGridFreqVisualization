@@ -1,4 +1,3 @@
-#include <Display.h>
 #include <avr/sleep.h>
 #include <PinChangeInterrupt.h>
 #define PIN_NEO 2
@@ -7,6 +6,9 @@
 #define PIN_CLOCK 12
 //#define SERIAL_OUT
 //#define STRIP_OUT
+#ifdef STRIP_OUT
+#include <Display.h>
+#endif
 
 /**
   Button interrupt variables
@@ -121,13 +123,17 @@ void setMode(int btTic) {
 #ifdef SERIAL_OUT
     Serial.println("Mode 2 ~ 200MHz");
 #endif
+#ifdef STRIP_OUT
     updateMode(2, freq);
+#endif
   }
   else {
 #ifdef SERIAL_OUT
     Serial.println("Mode 1 ~ 50MHz");
 #endif
+#ifdef STRIP_OUT
     updateMode(1, freq);
+#endif
   }
 }
 
@@ -220,4 +226,3 @@ void loop() {
     }
   }
 }
-
